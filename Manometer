@@ -1,0 +1,774 @@
+<!--
+=============================================================================================
+PROJECT: Interactive Manometer Educational Tool (EduPhysics)
+DESCRIPTION: 
+เว็บแอปพลิเคชันสื่อการสอนแบบอินเทอร์แอกทีฟสำหรับวิชากลศาสตร์ของไหล (Fluid Mechanics) เรื่อง แมนอมิเตอร์ 
+(Manometer) เน้นการออกแบบให้อ่านง่าย สวยงาม เหมาะสำหรับการเรียนรู้ด้วยตัวเอง (Self-learning)
+
+FEATURES:
+1. UI สวยงาม ทันสมัย และ Responsive รองรับ 2 ภาษา (English / Thai)
+2. แบบจำลอง Canvas: วาดหลอดรูปตัวยูและถังแก๊สที่ต่อเนื่องกัน ตอบสนองแบบ Real-time
+3. กล่องคำนวณ: แสดงที่มาและวิธีทำอย่างละเอียดทีละขั้นตอน
+4. โจทย์ตัวอย่าง: ผู้ใช้สามารถกรอกตัวเลขความสูง กำหนดความดันบรรยากาศ และเลือกของเหลว เพื่อดูการเปลี่ยนแปลงของคำตอบได้ทันที
+
+AUTHOR: Gemini
+CREDIT: OpenSimLab.org
+TECHNOLOGY: HTML5, Tailwind CSS (via CDN), Vanilla JavaScript
+=============================================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Manometer Educational Tool</title>
+    <!-- นำเข้า Tailwind CSS (ใช้สร้าง UI โดยไม่ต้องเขียน CSS เองทั้งหมด) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- นำเข้าฟอนต์จาก Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* จัดการฟอนต์ให้เปลี่ยนตามภาษาอัตโนมัติ */
+        body.lang-en { font-family: 'Inter', sans-serif; }
+        body.lang-th { font-family: 'Sarabun', sans-serif; }
+        
+        /* ป้องกันพฤติกรรมการทัชบน Canvas ที่อาจทำให้หน้าจอเลื่อน */
+        canvas { touch-action: none; }
+        
+        /* ตกแต่งแถบเลื่อน (Slider) ให้ดูสวยงามและใช้งานง่าย */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 28px;
+            width: 28px;
+            border-radius: 50%;
+            background: #3b82f6; 
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 3px 8px rgba(59, 130, 246, 0.4);
+            border: 3px solid white;
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        input[type=range]:focus::-webkit-slider-runnable-track {
+            background: #94a3b8;
+        }
+
+        /* ตกแต่งปุ่ม Toggle สำหรับเปลี่ยนภาษา */
+        .switch-checkbox:checked + .switch-label {
+            background-color: #3b82f6;
+        }
+        .switch-checkbox:checked + .switch-label .switch-button {
+            transform: translateX(100%);
+        }
+        
+        /* สไตล์สำหรับตัวแปรทางคณิตศาสตร์ */
+        .math-font { font-family: 'Times New Roman', Times, serif; font-style: italic; }
+
+        /* ซ่อนลูกศรขึ้นลงในช่อง input number */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 lang-en transition-colors duration-300">
+
+    <!-- แถบนำทางด้านบนและส่วนเปลี่ยนภาษา -->
+    <nav class="bg-white shadow-sm sticky top-0 z-50 border-b border-slate-200">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="font-bold text-xl text-blue-600 flex items-center gap-2">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                <span>EduPhysics</span>
+            </div>
+            
+            <div class="flex items-center gap-3 bg-slate-100 p-1.5 rounded-full border border-slate-200">
+                <span class="text-sm font-bold text-slate-400 transition-colors px-2" id="langEnLabel">EN</span>
+                <div class="relative">
+                    <input type="checkbox" id="langToggle" class="switch-checkbox hidden">
+                    <label for="langToggle" class="switch-label block w-12 h-6 bg-slate-300 rounded-full cursor-pointer transition-colors duration-300">
+                        <span class="switch-button absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 shadow-sm"></span>
+                    </label>
+                </div>
+                <span class="text-sm font-bold text-slate-400 transition-colors px-2" id="langThLabel">TH</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-5xl mx-auto px-4 py-10">
+        
+        <header class="text-center mb-12">
+            <div class="inline-block bg-blue-100 text-blue-700 px-4 py-1.5 rounded-full text-sm font-bold tracking-wider uppercase mb-4 shadow-sm" id="moduleLabel">Fluid Mechanics Module</div>
+            <h1 id="pageTitle" class="text-4xl md:text-5xl font-extrabold text-slate-900 mb-6 tracking-tight">Interactive Manometer</h1>
+            <p id="pageSubtitle" class="text-lg md:text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">Explore fluid mechanics, gauge pressure, and absolute pressure with this interactive U-tube manometer simulation.</p>
+        </header>
+
+        <!-- ส่วนอธิบายทฤษฎีและสูตร -->
+        <div class="grid md:grid-cols-2 gap-8 mb-12">
+            <!-- กล่องทฤษฎี -->
+            <section class="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-sm p-8 border border-slate-200 flex flex-col hover:shadow-md transition-shadow">
+                <div class="flex items-center gap-4 mb-6">
+                    <div class="bg-emerald-100 text-emerald-600 p-3 rounded-xl shadow-inner">
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                    </div>
+                    <h2 id="conceptTitle" class="text-2xl font-bold text-slate-800">Concepts and Principles</h2>
+                </div>
+                <div id="conceptText" class="text-slate-700 text-lg leading-relaxed flex-grow">
+                    <p>A manometer measures pressure differences. The gas pressure pushes the liquid down, creating a height difference (<span class="math-font text-blue-600 font-bold">h</span>). The higher the pressure, the greater the height difference.</p>
+                </div>
+            </section>
+            
+            <!-- กล่องสูตร -->
+            <section class="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-8 border border-emerald-100 border-l-4 border-l-emerald-500 flex flex-col justify-center shadow-sm">
+                <h3 id="formulaTitle" class="text-xl font-bold text-emerald-900 mb-6 text-center">Important Formulas</h3>
+                <div class="space-y-6 text-center">
+                    <div class="bg-white py-3 px-6 rounded-lg shadow-sm border border-emerald-100 inline-block">
+                        <span class="text-2xl font-bold text-emerald-800 font-mono tracking-wider">P<sub>gauge</sub> = ρ &times; g &times; h</span>
+                    </div>
+                    <div>
+                        <span class="text-xl font-bold text-emerald-800 font-mono tracking-wider bg-white py-2 px-4 rounded-lg shadow-sm border border-emerald-100 inline-block">P<sub>abs</sub> = P<sub>atm</sub> + P<sub>gauge</sub></span>
+                    </div>
+                    
+                    <!-- ส่วนนิยามตัวแปร -->
+                    <div id="varDefs" class="text-left text-base text-emerald-800 mt-4 border-t border-emerald-200/60 pt-6 leading-relaxed">
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ส่วนจำลองอินเทอร์แอกทีฟและแสดงผลการคำนวณ -->
+        <section class="bg-white rounded-3xl shadow-sm p-6 md:p-10 mb-12 border border-slate-200">
+            <div class="flex items-center gap-4 mb-8">
+                <div class="bg-purple-100 text-purple-600 p-3 rounded-xl shadow-inner">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                </div>
+                <h2 id="interactiveTitle" class="text-3xl font-bold text-slate-800 tracking-tight">Interactive Model & Calculation</h2>
+            </div>
+            
+            <div class="grid lg:grid-cols-2 gap-10 items-start">
+                
+                <!-- ฝั่งซ้าย: Canvas แบบจำลอง -->
+                <div class="bg-slate-50 rounded-2xl p-6 border border-slate-200 flex flex-col items-center shadow-inner">
+                    <canvas id="manometerCanvas" width="480" height="380" class="max-w-full h-auto"></canvas>
+                </div>
+
+                <!-- ฝั่งขวา: แถบเลื่อนและวิธีทำ -->
+                <div class="flex flex-col gap-8">
+                    
+                    <!-- แถบเลื่อน (Slider) -->
+                    <div class="bg-gradient-to-b from-white to-slate-50 p-8 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>
+                        <div class="flex justify-between items-end mb-6">
+                            <label for="pressureSlider" id="sliderLabel" class="text-lg font-bold text-slate-700">Set Gas Pressure (P<sub>gauge</sub>):</label>
+                            <div class="bg-blue-100 px-4 py-2 rounded-lg text-blue-700 font-bold text-2xl shadow-inner border border-blue-200">
+                                <span id="pressureValue">0</span> <span class="text-lg">Pa</span>
+                            </div>
+                        </div>
+                        <input type="range" id="pressureSlider" min="0" max="2000" value="0" step="10" class="w-full">
+                        <p id="assumptionText" class="text-sm text-slate-500 mt-5 text-center bg-white py-2 rounded-md border border-slate-100">* Using Water (ρ = 1,000 kg/m³), g = 9.8 m/s², P<sub>atm</sub> = 101,325 Pa</p>
+                    </div>
+
+                    <!-- กล่องแสดงวิธีทำแบบ Step-by-Step -->
+                    <div class="bg-slate-800 text-slate-100 p-8 rounded-2xl shadow-lg border border-slate-700 font-mono text-base leading-relaxed relative">
+                        <div class="absolute -top-3 left-6 bg-indigo-500 text-white text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow" id="calcHeader">Step-by-Step Calculation</div>
+                        
+                        <div class="space-y-6 mt-4">
+                            <!-- ขั้นที่ 1 -->
+                            <div>
+                                <span class="text-blue-300 font-bold text-lg border-b border-slate-600 pb-1" id="calcStep1Title">1. Find Height (h):</span>
+                                <div class="mt-3 ml-4 space-y-1">
+                                    <span class="text-slate-400 block" id="calcStep1Line1">From P<sub>gauge</sub> = ρ &times; g &times; h</span>
+                                    <span class="text-emerald-300 block">h = P<sub>gauge</sub> / (ρ &times; g)</span>
+                                    <span class="block">h = <span id="dynP1" class="text-white font-bold">0</span> / (1000 &times; 9.8)</span>
+                                    <span class="block mt-2 bg-slate-700/50 p-2 rounded inline-block">
+                                        h = <span id="dynH_m" class="font-bold text-white text-lg">0.0000</span> m = <span id="dynH_cm" class="font-bold text-yellow-400 text-xl">0.00</span> cm
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- ขั้นที่ 2 -->
+                            <div class="border-t border-slate-700 pt-5">
+                                <span class="text-blue-300 font-bold text-lg border-b border-slate-600 pb-1" id="calcStep2Title">2. Find Absolute Pressure (P<sub>abs</sub>):</span>
+                                <div class="mt-3 ml-4 space-y-1">
+                                    <span class="text-slate-400 block">P<sub>abs</sub> = P<sub>atm</sub> + P<sub>gauge</sub></span>
+                                    <span class="block">P<sub>abs</sub> = 101,325 + <span id="dynP2" class="text-white font-bold">0</span></span>
+                                    <span class="block mt-2 bg-slate-700/50 p-2 rounded inline-block">
+                                        P<sub>abs</sub> = <span id="dynPabs" class="text-green-400 font-bold text-xl">101,325</span> Pa
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ส่วนตัวอย่างโจทย์แบบแก้ไขตัวเลขได้ -->
+        <section class="bg-white rounded-3xl shadow-sm p-6 md:p-10 mb-8 border border-slate-200 relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-amber-100 rounded-bl-full -z-10 opacity-50"></div>
+            
+            <div class="flex items-center gap-4 mb-8">
+                <div class="bg-amber-100 text-amber-600 p-3 rounded-xl shadow-inner">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                </div>
+                <h2 id="exampleTitle" class="text-3xl font-bold text-slate-800 tracking-tight">Example Problem</h2>
+            </div>
+            
+            <div class="bg-amber-50/70 rounded-2xl p-8 border border-amber-200 flex flex-col md:flex-row gap-10 shadow-sm">
+                
+                <!-- รูปประกอบตัวอย่างโจทย์ (SVG แบบต่อเนื่องไม่ขาด) -->
+                <div class="md:w-1/3 flex-shrink-0 flex justify-center items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm w-full">
+                    <svg width="100%" height="auto" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg" class="max-w-[260px] mx-auto">
+                        <defs>
+                            <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
+                            </marker>
+                        </defs>
+                        
+                        <!-- พื้นหลังกรอบนอก (สีเทาเข้ม) วาดเส้นให้ต่อเนื่องกัน -->
+                        <circle cx="50" cy="110" r="40" fill="#475569" />
+                        <!-- ใช้ stroke-linecap="butt" สำหรับปลายเปิดด้านขวา และใช้ stroke-linejoin="round" สำหรับรอยต่อฐานตัวยู -->
+                        <path d="M 50 110 L 100 110 L 100 200 A 30 30 0 0 0 160 200 L 160 40" stroke="#475569" stroke-width="24" fill="none" stroke-linejoin="round" stroke-linecap="butt"/>
+                        
+                        <!-- ชั้นกระจกใส (สีขาวเทา) วาดทับกรอบนอก -->
+                        <circle cx="50" cy="110" r="38" fill="#f8fafc" />
+                        <path d="M 50 110 L 100 110 L 100 200 A 30 30 0 0 0 160 200 L 160 40" stroke="#f8fafc" stroke-width="20" fill="none" stroke-linejoin="round" stroke-linecap="butt"/>
+
+                        <!-- ชั้นบรรจุแก๊ส (สีเทา) วาดทับกระจก -->
+                        <circle cx="50" cy="110" r="38" fill="#cbd5e1" />
+                        <!-- แก๊สดันมาจนถึงระดับ 170 -->
+                        <path d="M 50 110 L 100 110 L 100 170" stroke="#cbd5e1" stroke-width="20" fill="none" stroke-linejoin="round" stroke-linecap="butt"/>
+
+                        <!-- ชั้นบรรจุของเหลว (เปลี่ยนสีตามชนิดของเหลวได้) วาดจากรอยต่อแก๊สไปจนถึงปลายเปิด -->
+                        <path id="svgFluidPath" d="M 100 170 L 100 200 A 30 30 0 0 0 160 200 L 160 80" stroke="#3b82f6" stroke-width="20" fill="none" stroke-linejoin="round" stroke-linecap="butt"/>
+                        
+                        <!-- ข้อความและลูกศร P atm -->
+                        <text x="50" y="115" font-family="sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#334155" id="svgGasText2">Gas</text>
+                        <text x="160" y="15" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#64748b" id="svgPatmText2">P atm</text>
+                        <!-- ลูกศรชี้เข้าปลายเปิด -->
+                        <path d="M 160 20 L 160 30" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" />
+                
+                        <!-- เส้นบอกระยะ h -->
+                        <line x1="80" y1="170" x2="200" y2="170" stroke="#ef4444" stroke-dasharray="5 3" stroke-width="1.5" />
+                        <line x1="140" y1="80" x2="200" y2="80" stroke="#ef4444" stroke-dasharray="5 3" stroke-width="1.5" />
+                        
+                        <!-- ลูกศรชี้ขึ้นลงของระยะ h -->
+                        <line x1="190" y1="170" x2="190" y2="80" stroke="#ef4444" stroke-width="1.5" />
+                        <polygon points="190,80 186,86 194,86" fill="#ef4444" />
+                        <polygon points="190,170 186,164 194,164" fill="#ef4444" />
+                        
+                        <!-- Text h จะแปรผันตามค่าที่กรอกในกล่อง -->
+                        <rect x="180" y="118" width="55" height="20" fill="rgba(255,255,255,0.8)" rx="4"/>
+                        <text id="svgExampleHText" x="207" y="132" font-family="sans-serif" font-size="13" font-weight="bold" fill="#ef4444" text-anchor="middle">h = 15 cm</text>
+                    </svg>
+                </div>
+
+                <!-- เนื้อหาโจทย์และการคำนวณแบบ Dynamic -->
+                <div class="md:w-2/3">
+                    <p class="text-slate-800 text-xl leading-loose mb-6">
+                        <strong id="exProbLabel" class="text-amber-700 bg-amber-100 px-2 py-1 rounded">Problem:</strong> 
+                        <span id="exProbText1">A U-tube manometer containing</span>
+                        
+                        <!-- กล่องเลือกชนิดของเหลว -->
+                        <select id="exampleLiquid" class="inline-block bg-white border-2 border-amber-400 rounded-lg px-2 py-1 mx-1 shadow-sm focus:border-amber-600 focus:ring-2 focus:ring-amber-200 transition-all text-blue-700 font-extrabold text-xl outline-none cursor-pointer appearance-none text-center">
+                            <option id="optWater" value="1000">Water (ρ=1,000)</option>
+                            <option id="optMercury" value="13600">Mercury (ρ=13,600)</option>
+                            <option id="optOil" value="850">Oil (ρ=850)</option>
+                        </select>
+                        
+                        <span id="exProbText1_1">is used to measure gas pressure. The liquid level in the open arm is</span>
+                        
+                        <!-- กล่องแก้ไขตัวเลข h -->
+                        <span class="inline-flex items-center bg-white border-2 border-amber-400 rounded-lg px-2 py-1 mx-1 shadow-sm focus-within:border-amber-600 focus-within:ring-2 focus-within:ring-amber-200 transition-all cursor-text" onclick="document.getElementById('exampleH').focus()">
+                            <input type="number" id="exampleH" value="15" min="0" step="any" class="w-14 text-center text-blue-700 font-extrabold bg-transparent outline-none text-xl" title="Click to edit height">
+                            <span id="exProbUnit" class="text-amber-700 font-bold ml-1 text-lg">cm</span>
+                            <svg class="w-4 h-4 text-amber-500 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </span>
+                        
+                        <span id="exProbText2">higher than the arm connected to the gas. Assume atmospheric pressure is</span>
+                        
+                        <!-- กล่องแก้ไขตัวเลข P_atm -->
+                        <span class="inline-flex items-center bg-white border-2 border-amber-400 rounded-lg px-2 py-1 mx-1 shadow-sm focus-within:border-amber-600 focus-within:ring-2 focus-within:ring-amber-200 transition-all cursor-text" onclick="document.getElementById('examplePatm').focus()">
+                            <input type="number" id="examplePatm" value="101325" min="0" step="any" class="w-24 text-center text-blue-700 font-extrabold bg-transparent outline-none text-xl" title="Click to edit atmospheric pressure">
+                            <svg class="w-4 h-4 text-amber-500 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </span>
+                        
+                        <span id="exProbText3">Pa. Find the Gauge Pressure and Absolute Pressure.</span>
+                        
+                        <!-- อัปเดต Given อัตโนมัติตามค่าที่เลือกและกรอก -->
+                        <br><span class="text-base text-slate-500 mt-2 inline-block bg-slate-100 px-3 py-1 rounded-md" id="exProbGivenText">
+                            (Given: ρ = <span id="givenRho">1,000</span> kg/m³, g = 9.8 m/s², P<sub>atm</sub> = <span id="givenPatm">101,325</span> Pa)
+                        </span>
+                    </p>
+                    
+                    <!-- กล่องเฉลย -->
+                    <div class="bg-white p-6 rounded-xl border border-amber-200 shadow-md relative">
+                        <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-400 rounded-l-xl"></div>
+                        <h4 id="exSolTitle" class="font-extrabold text-amber-800 mb-5 text-xl pl-2">Solution:</h4>
+                        
+                        <div class="text-slate-800 space-y-4 text-base md:text-lg pl-2">
+                            <!-- คำนวณ P_gauge -->
+                            <div>
+                                <strong id="exSolStep1" class="text-blue-700">1. Height & Gauge Pressure:</strong>
+                                <div class="mt-2 ml-4 bg-slate-50 p-4 rounded-lg border border-slate-100 font-mono text-base">
+                                    h = <span id="exSolH_cm" class="font-bold">15</span> cm = <span id="exSolH_m" class="font-bold">0.15</span> m<br>
+                                    P<sub>gauge</sub> = ρ &times; g &times; h<br>
+                                    P<sub>gauge</sub> = <span id="exSolRho" class="font-bold">1000</span> &times; 9.8 &times; <span id="exSolH_m2" class="font-bold">0.15</span> = <strong class="text-blue-600 text-xl"><span id="exSolGauge">1,470</span> Pa</strong>
+                                </div>
+                            </div>
+                            
+                            <!-- คำนวณ P_abs -->
+                            <div class="pt-4">
+                                <strong id="exSolStep2" class="text-emerald-700">2. Absolute Pressure:</strong>
+                                <div class="mt-2 ml-4 bg-slate-50 p-4 rounded-lg border border-slate-100 font-mono text-base">
+                                    P<sub>abs</sub> = P<sub>atm</sub> + P<sub>gauge</sub><br>
+                                    P<sub>abs</sub> = <span id="exSolPatm" class="font-bold">101,325</span> + <span id="exSolGauge2" class="font-bold">1,470</span> = <strong class="text-emerald-600 text-xl"><span id="exSolAbs">102,795</span> Pa</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ส่วนท้ายเว็บเพื่อแสดง Credit -->
+    <footer class="bg-slate-900 text-slate-400 py-10 border-t-4 border-blue-500 mt-auto">
+        <div class="max-w-5xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <p class="text-lg font-bold text-slate-200 mb-1">Educational Module: Fluid Mechanics</p>
+                <p class="text-sm">An interactive approach to learning physics concepts.</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm mb-1">Powered by <a href="https://OpenSimLab.org" target="_blank" class="text-blue-400 hover:text-blue-300 transition font-bold">OpenSimLab.org</a></p>
+                <p class="text-sm">Interactive Code developed by <span class="text-slate-200 font-semibold bg-slate-800 px-2 py-0.5 rounded">Gemini</span></p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // ==========================================
+        // 1. ระบบจัดการคำแปลภาษา (Translation Data)
+        // ==========================================
+        const i18n = {
+            en: {
+                moduleLabel: "Fluid Mechanics Module",
+                pageTitle: "Interactive Manometer",
+                pageSubtitle: "Explore fluid mechanics, gauge pressure, and absolute pressure with this interactive U-tube manometer simulation.",
+                conceptTitle: "Concepts and Principles",
+                conceptText: "<p>A manometer measures pressure differences. The gas pressure pushes the liquid down, creating a height difference (<span class='math-font text-blue-600 font-bold'>h</span>). The higher the pressure, the greater the height difference.</p>",
+                formulaTitle: "Important Formulas",
+                varDefs: "<strong class='block mb-2 text-lg'>Variables Definition:</strong><ul class='list-disc pl-5 space-y-1'><li><strong>P<sub>gauge</sub></strong> = Gauge Pressure (Pa)</li><li><strong>P<sub>abs</sub></strong> = Absolute Pressure (Pa)</li><li><strong>P<sub>atm</sub></strong> = Atmospheric Pressure (Pa)</li><li><strong>ρ</strong> = Liquid density (kg/m³)</li><li><strong>g</strong> = Gravity acceleration (9.8 m/s²)</li><li><strong>h</strong> = Height difference (m)</li></ul>",
+                interactiveTitle: "Interactive Model & Calculation",
+                sliderLabel: "Set Gas Pressure (P<sub>gauge</sub>):",
+                assumptionText: "* Using Water (ρ = 1,000 kg/m³), g = 9.8 m/s², P<sub>atm</sub> = 101,325 Pa",
+                calcHeader: "Step-by-Step Calculation",
+                calcStep1Title: "1. Find Height (h):",
+                calcStep1Line1: "From P<sub>gauge</sub> = ρ &times; g &times; h",
+                calcStep2Title: "2. Find Absolute Pressure (P<sub>abs</sub>):",
+                exampleTitle: "Example Problem",
+                exProbLabel: "Problem:",
+                exProbText1: "A U-tube manometer containing",
+                exProbText1_1: "is used to measure gas pressure. The liquid level in the open arm is",
+                exProbText2: "higher than the arm connected to the gas. Assume atmospheric pressure is",
+                exProbText3: "Pa. Find the Gauge Pressure and Absolute Pressure.",
+                givenPrefix: "(Given: ",
+                liquidWater: "Water (ρ=1,000)",
+                liquidMercury: "Mercury (ρ=13,600)",
+                liquidOil: "Oil (ρ=850)",
+                exSolTitle: "Solution:",
+                exSolStep1: "1. Height & Gauge Pressure:",
+                exSolStep2: "2. Absolute Pressure:",
+                canvasGas: "Gas",
+                canvasPatm: "P atm",
+            },
+            th: {
+                moduleLabel: "บทเรียนกลศาสตร์ของไหล",
+                pageTitle: "แมนอมิเตอร์ (Manometer)",
+                pageSubtitle: "เรียนรู้เรื่องความดันเกจและความดันสัมบูรณ์ ผ่านแบบจำลองหลอดรูปตัวยูอินเทอร์แอกทีฟ",
+                conceptTitle: "หลักการทำงาน",
+                conceptText: "<p>แมนอมิเตอร์ใช้ผลต่างของระดับของเหลวในการวัดความดัน ความดันแก๊สที่มากกว่าจะดันของเหลวให้ลดต่ำลง เกิดเป็นความต่างระดับ (<span class='math-font text-blue-600 font-bold'>h</span>) ยิ่งความดันแก๊สมาก ความต่างระดับก็ยิ่งมากตามไปด้วย</p>",
+                formulaTitle: "สูตรที่สำคัญ",
+                varDefs: "<strong class='block mb-2 text-lg'>นิยามตัวแปร:</strong><ul class='list-disc pl-5 space-y-1'><li><strong>P<sub>gauge</sub></strong> = ความดันเกจ (Pa หรือ N/m²)</li><li><strong>P<sub>abs</sub></strong> = ความดันสัมบูรณ์ (Pa)</li><li><strong>P<sub>atm</sub></strong> = ความดันบรรยากาศ (Pa)</li><li><strong>ρ</strong> = ความหนาแน่นของของเหลว (kg/m³)</li><li><strong>g</strong> = ความเร่งโน้มถ่วง (9.8 m/s²)</li><li><strong>h</strong> = ผลต่างความสูงของของเหลว (m)</li></ul>",
+                interactiveTitle: "แบบจำลองอินเทอร์แอกทีฟ & วิธีคำนวณ",
+                sliderLabel: "ปรับค่าความดันแก๊ส (P<sub>gauge</sub>):",
+                assumptionText: "* กำหนดให้น้ำมีความหนาแน่น (ρ) = 1,000 kg/m³, g = 9.8 m/s², P<sub>atm</sub> = 101,325 Pa",
+                calcHeader: "แสดงวิธีทำอย่างละเอียด",
+                calcStep1Title: "1. หาความสูง (h):",
+                calcStep1Line1: "จากสูตร P<sub>gauge</sub> = ρ &times; g &times; h",
+                calcStep2Title: "2. หาความดันสัมบูรณ์ (P<sub>abs</sub>):",
+                exampleTitle: "ตัวอย่างโจทย์แบบอินเทอร์แอกทีฟ",
+                exProbLabel: "โจทย์:",
+                exProbText1: "นำแมนอมิเตอร์บรรจุ",
+                exProbText1_1: "ไปวัดความดันท่อแก๊ส พบว่าระดับของเหลวด้านเปิดสู่อากาศสูงกว่าด้านท่อแก๊สอยู่",
+                exProbText2: "(กำหนดให้ความดันบรรยากาศ =",
+                exProbText3: "Pa) จงหา ความดันเกจ และ ความดันสัมบูรณ์",
+                givenPrefix: "(กำหนดให้: ",
+                liquidWater: "น้ำ (ρ=1,000)",
+                liquidMercury: "ปรอท (ρ=13,600)",
+                liquidOil: "น้ำมัน (ρ=850)",
+                exSolTitle: "วิธีทำ:",
+                exSolStep1: "1. หาความสูง & ความดันเกจ:",
+                exSolStep2: "2. หาความดันสัมบูรณ์:",
+                canvasGas: "แก๊ส",
+                canvasPatm: "P บรรยากาศ",
+            }
+        };
+
+        let currentLang = 'en';
+        const langToggle = document.getElementById('langToggle');
+        const pressureSlider = document.getElementById('pressureSlider');
+        const exampleInput = document.getElementById('exampleH');
+        const exampleLiquid = document.getElementById('exampleLiquid');
+        const examplePatm = document.getElementById('examplePatm');
+        
+        // ==========================================
+        // 2. ฟังก์ชันอัปเดตหน้าจอตามภาษา (UI Language)
+        // ==========================================
+        function updateUI() {
+            const isThai = langToggle.checked;
+            currentLang = isThai ? 'th' : 'en';
+            
+            // เปลี่ยนฟอนต์บน Body
+            document.body.className = `bg-slate-50 text-slate-800 transition-colors duration-300 lang-${currentLang}`;
+            
+            // เปลี่ยนสีข้อความสถานะปุ่ม Toggle
+            document.getElementById('langEnLabel').classList.toggle('text-blue-600', !isThai);
+            document.getElementById('langEnLabel').classList.toggle('text-slate-400', isThai);
+            document.getElementById('langThLabel').classList.toggle('text-blue-600', isThai);
+            document.getElementById('langThLabel').classList.toggle('text-slate-400', !isThai);
+
+            // แทรกข้อความตามภาษาที่เลือก
+            const t = i18n[currentLang];
+            document.getElementById('moduleLabel').innerHTML = t.moduleLabel;
+            document.getElementById('pageTitle').innerHTML = t.pageTitle;
+            document.getElementById('pageSubtitle').innerHTML = t.pageSubtitle;
+            document.getElementById('conceptTitle').innerHTML = t.conceptTitle;
+            document.getElementById('conceptText').innerHTML = t.conceptText;
+            document.getElementById('formulaTitle').innerHTML = t.formulaTitle;
+            document.getElementById('varDefs').innerHTML = t.varDefs;
+            
+            document.getElementById('interactiveTitle').innerHTML = t.interactiveTitle;
+            document.getElementById('sliderLabel').innerHTML = t.sliderLabel;
+            document.getElementById('assumptionText').innerHTML = t.assumptionText;
+            document.getElementById('calcHeader').innerHTML = t.calcHeader;
+            
+            document.getElementById('calcStep1Title').innerHTML = t.calcStep1Title;
+            document.getElementById('calcStep1Line1').innerHTML = t.calcStep1Line1;
+            document.getElementById('calcStep2Title').innerHTML = t.calcStep2Title;
+            
+            document.getElementById('exampleTitle').innerHTML = t.exampleTitle;
+            document.getElementById('exProbLabel').innerHTML = t.exProbLabel;
+            document.getElementById('exProbText1').innerHTML = t.exProbText1;
+            document.getElementById('exProbText1_1').innerHTML = t.exProbText1_1;
+            document.getElementById('exProbText2').innerHTML = t.exProbText2;
+            document.getElementById('exProbText3').innerHTML = t.exProbText3;
+            
+            // อัปเดตภาษาของตัวเลือกของเหลว
+            document.getElementById('optWater').textContent = t.liquidWater;
+            document.getElementById('optMercury').textContent = t.liquidMercury;
+            document.getElementById('optOil').textContent = t.liquidOil;
+            
+            // สร้างข้อความ Given ใหม่ตามภาษา
+            const givenPrefix = t.givenPrefix;
+            const currentRho = document.getElementById('givenRho').textContent;
+            const currentPatm = document.getElementById('givenPatm').textContent;
+            document.getElementById('exProbGivenText').innerHTML = `${givenPrefix} ρ = <span id="givenRho">${currentRho}</span> kg/m³, g = 9.8 m/s², P<sub>atm</sub> = <span id="givenPatm">${currentPatm}</span> Pa)`;
+            
+            document.getElementById('exSolTitle').innerHTML = t.exSolTitle;
+            document.getElementById('exSolStep1').innerHTML = t.exSolStep1;
+            document.getElementById('exSolStep2').innerHTML = t.exSolStep2;
+
+            // ข้อความในรูป SVG ตัวอย่าง
+            document.getElementById('svgGasText2').textContent = t.canvasGas;
+            document.getElementById('svgPatmText2').textContent = t.canvasPatm;
+
+            // อัปเดตตัวเลขและวาด Canvas ใหม่เพื่อให้ข้อความภาษาเปลี่ยนไปตาม
+            updateCalculation(parseFloat(pressureSlider.value));
+        }
+
+        langToggle.addEventListener('change', updateUI);
+
+        // ==========================================
+        // 3. ฟังก์ชันคำนวณและอัปเดตสำหรับ Interactive Model
+        // ==========================================
+        function updateCalculation(p_gauge) {
+            const h_m = p_gauge / (1000 * 9.8); // เมตร
+            const h_cm = h_m * 100;             // เซนติเมตร
+            const p_atm = 101325;
+            const p_abs = p_atm + p_gauge;
+            
+            // อัปเดตตัวเลขใน DOM (ใช้ textContent เพื่อไม่ลบ HTML Tags ภายใน)
+            document.getElementById('pressureValue').textContent = p_gauge.toLocaleString();
+            document.getElementById('dynP1').textContent = p_gauge.toLocaleString();
+            document.getElementById('dynP2').textContent = p_gauge.toLocaleString();
+            document.getElementById('dynH_m').textContent = h_m.toFixed(4);
+            document.getElementById('dynH_cm').textContent = h_cm.toFixed(2);
+            document.getElementById('dynPabs').textContent = p_abs.toLocaleString();
+            
+            // สั่งวาด Canvas รูปหลอดตัวยูใหม่ตามค่า h
+            drawManometer(p_gauge, h_cm);
+        }
+
+        // ==========================================
+        // 4. ฟังก์ชันคำนวณสำหรับ Example Problem 
+        // ==========================================
+        function updateExampleCalculation() {
+            // อ่านค่าจากช่อง Input ทั้งหมด
+            let h_val = parseFloat(exampleInput.value);
+            let rho_val = parseFloat(exampleLiquid.value);
+            let patm_val = parseFloat(examplePatm.value);
+            
+            // ตรวจสอบค่าถ้าผู้ใช้ลบจนว่างหรือติดลบ ให้ใช้ 0
+            if (isNaN(h_val) || h_val < 0) h_val = 0;
+            if (isNaN(patm_val) || patm_val < 0) patm_val = 0;
+            
+            const h_m = h_val / 100;
+            const p_gauge = rho_val * 9.8 * h_m;
+            const p_abs = patm_val + p_gauge;
+            
+            // จัด Format มีจุลภาค
+            const rho_str = rho_val.toLocaleString();
+            const patm_str = patm_val.toLocaleString();
+            const p_gauge_str = p_gauge.toLocaleString(undefined, {maximumFractionDigits: 1});
+            const p_abs_str = p_abs.toLocaleString(undefined, {maximumFractionDigits: 1});
+
+            // เปลี่ยนสีของเหลวใน SVG ตัวอย่างโจทย์
+            let fluidColor = "#3b82f6"; // สีน้ำเงิน (น้ำ)
+            if (rho_val === 13600) fluidColor = "#94a3b8"; // สีเทาเงิน (ปรอท)
+            else if (rho_val === 850) fluidColor = "#eab308"; // สีเหลืองทอง (น้ำมัน)
+            document.getElementById('svgFluidPath').setAttribute("stroke", fluidColor);
+
+            // อัปเดตค่าในบรรทัด (Given: ...)
+            document.getElementById('givenRho').textContent = rho_str;
+            document.getElementById('givenPatm').textContent = patm_str;
+
+            // แสดงผลในกล่อง Solution
+            document.getElementById('exSolH_cm').textContent = h_val;
+            document.getElementById('exSolH_m').textContent = h_m.toFixed(2);
+            document.getElementById('exSolH_m2').textContent = h_m.toFixed(2);
+            document.getElementById('exSolRho').textContent = rho_str;
+            document.getElementById('exSolPatm').textContent = patm_str;
+            document.getElementById('exSolGauge').textContent = p_gauge_str;
+            document.getElementById('exSolGauge2').textContent = p_gauge_str;
+            document.getElementById('exSolAbs').textContent = p_abs_str;
+            
+            // อัปเดตตัวหนังสือชี้ระยะ h ในกราฟิก SVG
+            document.getElementById('svgExampleHText').textContent = `h = ${h_val} cm`;
+        }
+
+        // ฟังอีเวนต์เมื่อมีการแก้ไขค่าในโจทย์
+        exampleInput.addEventListener('input', updateExampleCalculation);
+        exampleLiquid.addEventListener('change', updateExampleCalculation);
+        examplePatm.addEventListener('input', updateExampleCalculation);
+        
+        pressureSlider.addEventListener('input', function() {
+            updateCalculation(parseFloat(this.value));
+        });
+
+        // ==========================================
+        // 5. ระบบวาดแบบจำลอง (Advanced Canvas Logic)
+        // ==========================================
+        const canvas = document.getElementById('manometerCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // การตั้งค่าขนาดและพิกัดท่อ (ใช้ตัวเลขเดียวกับ SVG เพื่อให้สัดส่วนตรงกัน)
+        const cx = 260;           // กึ่งกลางหลอด
+        const radius = 70;        // รัศมีส่วนโค้งของตัวยู
+        const tubeThickness = 26; // ความหนาเส้นกรอบนอก
+        const innerThickness = 20;// ความหนาช่องของไหล
+        
+        const topY = 80;          // ความสูงปลายเปิด
+        const bottomY = 290;      // ฐานหลอดตัวยู
+        const baseLevel = 190;    // ระดับน้ำตอนสมดุล
+        
+        const tankX = cx - radius - 50; 
+        const tankY = 110; 
+
+        function drawManometer(pressure, h_cm) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // ขยายสเกลความสูงเพื่อให้เห็นชัดเวลาวาด (Scale factor)
+            const h_pixels = h_cm * 2.5; 
+            const leftLevel = baseLevel + (h_pixels / 2);
+            const rightLevel = baseLevel - (h_pixels / 2);
+
+            const fontFamily = currentLang === 'en' ? 'Inter' : 'Sarabun';
+            const gasText = i18n[currentLang].canvasGas;
+            const patmText = i18n[currentLang].canvasPatm;
+
+            // เทคนิคการวาดให้เป็นชิ้นเดียวกันโดยไม่ให้มีเส้นขีดคั่นกลาง:
+            // เราจะวาดเป็นชั้นๆ (Layer) โดยวาดรูปทรงรวม (ถัง+ท่อ) ก่อน แล้วค่อยถมสีด้านใน
+
+            // กำหนดรูปแบบปลายเส้นและรอยต่อให้โค้งมน เพื่อความสมูท
+            ctx.lineJoin = "round";
+            // ปลายหลอดตัดตรง (butt) เพื่อสื่อว่าเป็นท่อปลายเปิด
+            ctx.lineCap = "butt";
+
+            // --- Layer 1: พื้นหลังส่วนกรอบนอกสุด (สีเทาเข้ม) ---
+            ctx.fillStyle = "#475569";
+            ctx.beginPath();
+            ctx.arc(tankX, tankY, 40, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "#475569"; 
+            ctx.lineWidth = tubeThickness;
+            ctx.beginPath();
+            ctx.moveTo(tankX, tankY);               // เริ่มจากกึ่งกลางถังแก๊ส
+            ctx.lineTo(cx - radius, tankY);         // ลากไปท่อซ้าย
+            ctx.lineTo(cx - radius, bottomY);       // ลงมาฐาน
+            ctx.arc(cx, bottomY, radius, Math.PI, 0, true); // โค้งตัวยู
+            ctx.lineTo(cx + radius, topY);          // ขึ้นท่อขวา
+            ctx.stroke();
+
+            // --- Layer 2: พื้นหลังส่วนกระจกท่อ (สีขาวเทา) ลบเส้นที่ตัดกันออก ---
+            ctx.fillStyle = "#f8fafc";
+            ctx.beginPath();
+            ctx.arc(tankX, tankY, 38, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "#f8fafc";
+            ctx.lineWidth = innerThickness;
+            ctx.beginPath();
+            ctx.moveTo(tankX, tankY);
+            ctx.lineTo(cx - radius, tankY);
+            ctx.lineTo(cx - radius, bottomY);
+            ctx.arc(cx, bottomY, radius, Math.PI, 0, true);
+            ctx.lineTo(cx + radius, topY);
+            ctx.stroke();
+
+            // --- Layer 3: ถมสีส่วนที่เป็นแก๊ส (สีเทาอ่อน) ---
+            ctx.fillStyle = "#cbd5e1";
+            ctx.beginPath();
+            ctx.arc(tankX, tankY, 38, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "#cbd5e1"; 
+            ctx.lineWidth = innerThickness;
+            ctx.beginPath();
+            ctx.moveTo(tankX, tankY);
+            ctx.lineTo(cx - radius, tankY);
+            ctx.lineTo(cx - radius, leftLevel); // วาดแก๊สลงมาถึงแค่ระดับน้ำซ้าย
+            ctx.stroke();
+
+            // --- Layer 4: ถมสีส่วนที่เป็นน้ำ (สีฟ้า) ---
+            ctx.strokeStyle = "#3b82f6";
+            ctx.lineWidth = innerThickness;
+            ctx.beginPath();
+            ctx.moveTo(cx - radius, leftLevel); // เริ่มจากระดับน้ำซ้าย
+            ctx.lineTo(cx - radius, bottomY);
+            ctx.arc(cx, bottomY, radius, Math.PI, 0, true);
+            ctx.lineTo(cx + radius, rightLevel); // ไปจบรอยต่อระดับน้ำขวา
+            ctx.stroke();
+
+            // --- Layer 5: ข้อความและลูกศรประกอบ ---
+            
+            // ข้อความกำกับ: แก๊ส
+            ctx.fillStyle = "#334155"; 
+            ctx.font = `bold 18px ${fontFamily}`;
+            ctx.textAlign = "center";
+            ctx.fillText(gasText, tankX, tankY + 5);
+
+            // ข้อความกำกับ: P atm
+            ctx.fillStyle = "#64748b"; 
+            ctx.font = `14px ${fontFamily}`;
+            ctx.fillText(patmText, cx + radius, topY - 35);
+            
+            // ลูกศรแสดงความดันบรรยากาศชี้ลงเข้าปลายเปิด
+            ctx.strokeStyle = "#94a3b8"; 
+            ctx.lineWidth = 2;
+            for(let i = -1; i <= 1; i++) {
+                let ax = cx + radius + (i*8);
+                ctx.beginPath();
+                ctx.moveTo(ax, topY - 25);
+                ctx.lineTo(ax, topY - 8);
+                ctx.stroke();
+                // วาดหัวลูกศร
+                ctx.beginPath();
+                ctx.moveTo(ax, topY - 8);
+                ctx.lineTo(ax - 4, topY - 13);
+                ctx.lineTo(ax + 4, topY - 13);
+                ctx.fillStyle = "#94a3b8";
+                ctx.fill();
+            }
+
+            // --- Layer 6: เส้นบอกระยะความต่างระดับ h ---
+            if (h_pixels > 1) {
+                ctx.strokeStyle = "#ef4444"; // สีแดงสำหรับเน้น
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([5, 4]); // กำหนดเป็นเส้นประ
+                
+                // ขีดเส้นระดับน้ำซ้าย
+                ctx.beginPath();
+                ctx.moveTo(cx - radius + 10, leftLevel);
+                ctx.lineTo(cx + radius + 60, leftLevel);
+                ctx.stroke();
+                
+                // ขีดเส้นระดับน้ำขวา
+                ctx.beginPath();
+                ctx.moveTo(cx + radius + 10, rightLevel);
+                ctx.lineTo(cx + radius + 60, rightLevel);
+                ctx.stroke();
+                
+                ctx.setLineDash([]); // กลับมาใช้เส้นทึบปกติ
+
+                // วาดแกนลูกศรความสูงแนวตั้ง
+                const arrowX = cx + radius + 40;
+                ctx.beginPath();
+                ctx.moveTo(arrowX, rightLevel);
+                ctx.lineTo(arrowX, leftLevel);
+                ctx.stroke();
+
+                // วาดหัวลูกศรด้านบน
+                ctx.beginPath();
+                ctx.moveTo(arrowX, rightLevel);
+                ctx.lineTo(arrowX - 5, rightLevel + 8);
+                ctx.lineTo(arrowX + 5, rightLevel + 8);
+                ctx.fillStyle = "#ef4444";
+                ctx.fill();
+
+                // วาดหัวลูกศรด้านล่าง
+                ctx.beginPath();
+                ctx.moveTo(arrowX, leftLevel);
+                ctx.lineTo(arrowX - 5, leftLevel - 8);
+                ctx.lineTo(arrowX + 5, leftLevel - 8);
+                ctx.fill();
+                
+                // พื้นหลังข้อความ h เล็กน้อยให้อ่านง่าย
+                ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+                ctx.fillRect(arrowX + 12, baseLevel - 10, 25, 20);
+                
+                // พิมพ์ข้อความ h
+                ctx.fillStyle = "#ef4444";
+                ctx.font = `bold 18px ${fontFamily}`;
+                ctx.textAlign = "left";
+                ctx.fillText("h", arrowX + 15, baseLevel + 5);
+            }
+        }
+
+        // ==========================================
+        // 6. การกำหนดค่าเมื่อเริ่มต้นหน้าจอ (Initialization)
+        // ==========================================
+        window.onload = function() {
+            langToggle.checked = false; // เริ่มที่ภาษาอังกฤษ
+            updateUI();                 // โหลดคำแปลภาษาลง UI
+            updateExampleCalculation(); // เริ่มคำนวณโจทย์ด้วยค่าตั้งต้น
+        };
+
+    </script>
+</body>
+</html>
